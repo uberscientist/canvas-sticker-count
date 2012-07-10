@@ -3,9 +3,7 @@ var socket = io.connect('http://localhost');
 var container = document.getElementById('container'); 
 
 socket.on('graph', function(data){
-  var graph = Flotr.draw(
-    container, data,
-
+  var graph = Flotr.draw(container, data,
     { 
       HtmlText: false,
       grid: {

@@ -6,7 +6,8 @@
 var express = require('express')
   , routes = require('./routes')
   , app = module.exports = express.createServer()
-  , io = require('socket.io').listen(app);
+  , io = require('socket.io').listen(app)
+  , canvas = require('canvas.js');
 
 var redis = require('redis'),
     db = redis.createClient();
@@ -38,25 +39,43 @@ app.get('/', function(req, res){
 });
 
 app.get('/user/:id', function(req, res){
-  var graphData = [];
   var id = req.params.id;
 
+  res.render('index');
+
   io.sockets.on('connection', function(socket){
-    //Have express render
-    res.render('index');
 
-    db.zrevrange('stickers:'+id, 0, -1, 'withscores', function(err, data){
-      if(err) throw err;
+    var update = function(){
+      db.zrevrange('stickers:'+id, 0, -1, 'withscores', function(err, data){
+        if(err) throw err;
+        //console.log(data);
+        var graphData = [];
 
-      //Get sticker count from Redis and push them all to an array that Flotr2 can understand
-      for(var i=0; i < data.length/2; i += 2){
-        graphData.push({data: [[ 0, parseFloat(data[i+1]) ]], label: data[i]});
-      }
-      io.sockets.emit('graph',graphData);
-    });
+        if(data.length == 0){
+
+          //User we haven't seen before, get all sticker info
+          canvas.getStickers(id, 0, update, function(){
+            console.log('app.js callback fired');
+          });
+
+        }
+
+        //Get sticker count from Redis and push them all to an array that Flotr2 can understand
+        for(var i=0; i < data.length/2; i += 2){
+          graphData.push({data: [[ 0, parseFloat(data[i+1]) ]], label: data[i]});
+          if(i == data.length/2 - 1){
+            console.log('fin!');
+            //Send array over socket
+            io.sockets.emit('graph',graphData);
+          }
+        }
+
+      });
+    }
+
+    update();
+
   });
 });
 
 app.listen(3030);
-console.log("Express server listening on port %d in %s mode", app.address().port, app.settings.env);
-
