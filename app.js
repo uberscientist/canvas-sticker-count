@@ -1,97 +1,62 @@
-var request = require('request');
-var redis = require('redis');
 
-var db = redis.createClient();
+/**
+ * Module dependencies.
+ */
 
-var username = 'dmauro';
-var offset = 0;
-var limiting = null;
-var waitLonger = 0;
+var express = require('express')
+  , routes = require('./routes')
+  , app = module.exports = express.createServer()
+  , io = require('socket.io').listen(app);
 
-function startInterval(posts){
-  var c = -1;
+var redis = require('redis'),
+    db = redis.createClient();
 
-  limiting = setInterval(function(){
-      c++;
 
-      if(posts.length < 1){
-        clearInterval(limiting);
-        limiting = null;
-        console.log('No more posts!');
+// Configuration
+
+app.configure(function(){
+  app.set('views', __dirname + '/views');
+  app.set('view engine', 'ejs');
+  app.use(express.bodyParser());
+  app.use(express.methodOverride());
+  app.use(app.router);
+  app.use(express.static(__dirname + '/public'));
+});
+
+app.configure('development', function(){
+  app.use(express.errorHandler({ dumpExceptions: true, showStack: true })); 
+});
+
+app.configure('production', function(){
+  app.use(express.errorHandler()); 
+});
+
+// Routes
+
+app.get('/', function(req, res){
+  res.render('index');
+});
+
+app.get('/user/:id', function(req, res){
+  var graphData = [];
+  var id = req.params.id;
+
+  io.sockets.on('connection', function(socket){
+    //Have express render
+    res.render('index');
+
+    db.zrevrange('stickers:'+id, 0, -1, 'withscores', function(err, data){
+      if(err) throw err;
+
+      //Get sticker count from Redis and push them all to an array that Flotr2 can understand
+      for(var i=0; i < data.length/2; i += 2){
+        graphData.push({data: [[ 0, parseFloat(data[i+1]) ]], label: data[i]});
       }
-
-      request(posts[c].api_url, function(err, res, body){
-      var body = JSON.parse(body);
-
-      if(body.success == false){
-        console.log('Too fast, waiting extra ' + waitLonger + 'ms...');
-        c--;
-        waitLonger += 200;
-        clearInterval(limiting);
-        limiting = null;
-        startInterval(posts);
-
-      } else {
-
-        //array of objects, each representing a type of sticker
-        var stickers = body.stickers;
-        for(var i = 0; i < stickers.length; i++){
-          db.zincrby('stickers:'+username, stickers[i].count, stickers[i].name, function(err){
-            if(err) throw err;
-          });
-        }
-      }
-
- 
+      io.sockets.emit('graph',graphData);
     });
-
-    if(c == posts.length - 1){
-
-      //Increase our offset length for our next loop
-      if(posts.length == 10){
-        offset += 10;
-      }
-
-      clearInterval(limiting);
-      limiting = null;
-      getStickers(offset);
-    }
-  }, 50 + waitLonger);
-}
-
-function getStickers(offset){
-  if(waitLonger > 0){
-    waitLonger -= 100;
-  }
-  console.log('offset: ' + offset);
-  var offset_json = {
-    ids: [{user: username, skip: offset}]
-  }
-
-  var options = {
-    uri: 'http://canv.as/public_api/users/',
-    host: 'http://canv.as',
-    path: '/public_api/users/',
-    method: 'POST',
-    body: JSON.stringify(offset_json)
-  }
-
-  request(options, function(err, res, body){
-    var body = JSON.parse(body);
-
-    if(body.success == false){
-      //We've gone over our limit, need to slow down
-      console.log(body);
-
-    } else {
-
-      //Pass the posts to the interval function
-      var posts = body.users[0].posts;
-      startInterval(posts);
-
-    }
   });
+});
 
-}
+app.listen(3030);
+console.log("Express server listening on port %d in %s mode", app.address().port, app.settings.env);
 
-getStickers(offset);
