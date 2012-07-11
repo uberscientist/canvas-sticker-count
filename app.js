@@ -15,6 +15,8 @@ var redis = require('redis'),
 
 // Configuration
 
+io.set('log level', 1);
+
 app.configure(function(){
   app.set('views', __dirname + '/views');
   app.set('view engine', 'ejs');
@@ -32,6 +34,9 @@ app.configure('production', function(){
   app.use(express.errorHandler()); 
 });
 
+
+
+
 // Routes
 
 app.get('/', function(req, res){
@@ -48,7 +53,6 @@ app.get('/user/:id', function(req, res){
     var update = function(){
       db.zrevrange('stickers:'+id, 0, -1, 'withscores', function(err, data){
         if(err) throw err;
-        //console.log(data);
         var graphData = [];
 
         if(data.length == 0){
@@ -64,9 +68,8 @@ app.get('/user/:id', function(req, res){
         for(var i=0; i < data.length/2; i += 2){
           graphData.push({data: [[ 0, parseFloat(data[i+1]) ]], label: data[i]});
           if(i == data.length/2 - 1){
-            console.log('fin!');
             //Send array over socket
-            io.sockets.emit('graph',graphData);
+            socket.emit('graph',graphData);
           }
         }
 
