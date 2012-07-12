@@ -1,0 +1,13 @@
+body {
+  font-family: sans-serif;
+}
+#pagewrap {
+  width: 800px;
+  margin: 20px auto;
+}
+
+#container {
+  width: 600px;
+  height: 384px;
+  margin: 10px auto;
+}

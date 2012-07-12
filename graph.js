@@ -1,6 +1,5 @@
-var socket = io.connect('http://localhost');
-
-var container = document.getElementById('container'); 
+var container = document.getElementById('container');
+var messagetext = document.getElementById('message');
 
 socket.on('graph', function(data){
   var graph = Flotr.draw(container, data,
@@ -17,4 +16,8 @@ socket.on('graph', function(data){
       legend: { position: 'se' }
     }
   );
+});
+
+socket.on('message', function(data){
+   messagetext.innerHTML = data;
 });

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Canvas Stickers!</title>
+    <link rel='stylesheet' href='style.css' />
+    <script type='text/javascript' src='flotr2.min.js'></script>
+    <script type='text/javascript' src='http://localhost:3030/socket.io/socket.io.js'></script>
+    <script type='text/javascript'>
+      var socket = io.connect('http://localhost:3030');
+
+      function query(){
+        var id = document.getElementById('idTextBox').value;
+        socket.emit('getStickers', {id: id}); 
+        //document.queryform.submit.disabled=true;
+        //document.queryform.id.disabled=true;
+        return false;
+      }
+    </script>
+  </head>
+  <body>
+    <div id='pagewrap'>
+      <h1>Canvas Sticker Graph</h1>
+      <form name='queryform' onSubmit='return query()'>
+        Enter a username:
+        <input id='idTextBox' type='text' name='id' />
+        <input type='button' name='submit' value='Submit Query' onClick='query()' />
+      </form>
+      <p id='message'>Messages Appear Here</p>
+      <div id='container'></div>
+      <script type='text/javascript' src='graph.js'></script>
+    </div>
+  </body>
+</html>

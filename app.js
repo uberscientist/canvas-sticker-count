@@ -1,84 +1,137 @@
-
-/**
- * Module dependencies.
- */
-
-var express = require('express')
-  , routes = require('./routes')
-  , app = module.exports = express.createServer()
-  , io = require('socket.io').listen(app)
-  , canvas = require('canvas.js');
-
-var redis = require('redis'),
-    db = redis.createClient();
-
-
-// Configuration
+var io = require('socket.io').listen(3030),
+    redis = require('redis'),
+    request = require('request');
 
 io.set('log level', 1);
 
-app.configure(function(){
-  app.set('views', __dirname + '/views');
-  app.set('view engine', 'ejs');
-  app.use(express.bodyParser());
-  app.use(express.methodOverride());
-  app.use(app.router);
-  app.use(express.static(__dirname + '/public'));
-});
+var db = redis.createClient();
 
-app.configure('development', function(){
-  app.use(express.errorHandler({ dumpExceptions: true, showStack: true })); 
-});
+function update(id, socket){
+  db.zrevrange('stickers:'+ id, 0, -1, 'withscores', function(err, data){
+    if(err) throw err;
+    var graphData = [];
 
-app.configure('production', function(){
-  app.use(express.errorHandler()); 
-});
-
-
-
-
-// Routes
-
-app.get('/', function(req, res){
-  res.render('index');
-});
-
-app.get('/user/:id', function(req, res){
-  var id = req.params.id;
-
-  res.render('index');
-
-  io.sockets.on('connection', function(socket){
-
-    var update = function(){
-      db.zrevrange('stickers:'+id, 0, -1, 'withscores', function(err, data){
-        if(err) throw err;
-        var graphData = [];
-
-        if(data.length == 0){
-
-          //User we haven't seen before, get all sticker info
-          canvas.getStickers(id, 0, update, function(){
-            console.log('app.js callback fired');
-          });
-
-        }
-
-        //Get sticker count from Redis and push them all to an array that Flotr2 can understand
-        for(var i=0; i < data.length/2; i += 2){
-          graphData.push({data: [[ 0, parseFloat(data[i+1]) ]], label: data[i]});
-          if(i == data.length/2 - 1){
-            //Send array over socket
-            socket.emit('graph',graphData);
-          }
-        }
-
-      });
+    //Get sticker count from Redis and push them all to an array that Flotr2 can understand
+    for(var i=0; i < data.length/2; i += 2){
+      graphData.push({data: [[ 0, parseFloat(data[i+1]) ]], label: data[i]});
+      if(i >= data.length/2 - 2){
+        //Send array over socket
+        socket.emit('graph',graphData);
+      }
     }
 
-    update();
+  });
+}
 
+function startInterval(id, lastpost, posts, socket, offset, callback){
+  var c = -1;
+
+  limiting = setInterval(function(){
+    c++;
+
+    if(posts.length < 1){
+      clearInterval(limiting);
+      limiting = null;
+      console.log('No more posts!');
+      socket.emit('message', 'Finished downloading sticker data!');
+      callback();
+      return;
+    }
+
+    if(c >= posts.length - 1){
+
+      //Increase our offset length for our next loop
+      offset += 10;
+
+      clearInterval(limiting);
+      limiting = null;
+      getStickers(id, lastpost, socket, offset, callback);
+    }
+
+    if(typeof(posts[c]) == 'undefined'){
+      console.log('Undefined posts:');
+      console.log(c);
+      callback();
+      return;
+    }
+
+    if(lastpost == posts[c].id){
+      //Up to date now
+      callback();
+      return;
+    }
+
+    request(posts[c].api_url, function(err, res, body){
+      var body = JSON.parse(body);
+
+      //array of objects, each representing a type of sticker
+      var stickers = body.stickers;
+      for(var i = 0; i < stickers.length; i++){
+        db.zincrby('stickers:'+id, stickers[i].count, stickers[i].name, function(err){
+          if(err) throw err;
+          update(id, socket);
+        });
+      }
+
+    });
+
+
+  }, 1000);
+}
+
+
+function getStickers(id, lastpost, socket, offset, callback){
+
+  if(lastpost == null){
+    //first time seeing user
+  } else {
+    //update db up until 'lastpost'
+  }
+
+  console.log('username: ' + id + '; offset: ' + offset);
+
+  var offset_json = {
+    ids: [{user: id, skip: offset}]
+  }
+
+  var options = {
+    uri: 'http://canv.as/public_api/users/',
+    host: 'http://canv.as',
+    path: '/public_api/users/',
+    method: 'POST',
+    body: JSON.stringify(offset_json)
+  }
+
+  request(options, function(err, res, body){
+    var body = JSON.parse(body);
+
+    if(body.success == false || body.users.length == 0){
+      //Too fast OR no such user
+      console.log(body);
+      callback();
+
+    } else {
+
+      //Pass the posts to the interval function
+      var posts = body.users[0].posts;
+      startInterval(id, lastpost, posts, socket, offset, callback);
+
+    }
+  });
+}
+
+
+io.sockets.on('connection', function(socket){
+  socket.on('getStickers', function(data){
+
+    //Check redis for latest post, then call getStickers
+    db.get('lastpost:' + data.id, function(err, lastpost){
+      if(err) throw err;
+      getStickers(data.id, lastpost, socket, 0, function(){
+        console.log('woo');
+      });
+    });
+/*
+*/
   });
 });
-
-app.listen(3030);
