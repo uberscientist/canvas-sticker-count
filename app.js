@@ -13,7 +13,7 @@ function update(id, socket){
 
     //Get sticker count from Redis and push them all to an array that Flotr2 can understand
     for(var i=0; i < data.length/2; i += 2){
-      graphData.push({data: [[ 0, parseFloat(data[i+1]) ]], label: data[i]});
+      graphData.push({data: [[ 0, parseFloat(data[i+1]) ]], label: data[i] + ":" + data[i+1]});
       if(i >= data.length/2 - 2){
         //Send array over socket
         socket.emit('graph',graphData);
@@ -34,6 +34,7 @@ function startInterval(id, lastpost, posts, socket, offset, callback){
       limiting = null;
       console.log('No more posts!');
       socket.emit('message', 'Finished downloading sticker data!');
+      socket.emit('active', false);
       callback();
       return;
     }
@@ -89,6 +90,7 @@ function getStickers(id, lastpost, socket, offset, callback){
   }
 
   console.log('username: ' + id + '; offset: ' + offset);
+  socket.emit('message', 'username: ' + id + ' offset: ' + offset);
 
   var offset_json = {
     ids: [{user: id, skip: offset}]
@@ -108,6 +110,7 @@ function getStickers(id, lastpost, socket, offset, callback){
     if(body.success == false || body.users.length == 0){
       //Too fast OR no such user
       console.log(body);
+      socket.emit('message', 'ERROR: ' + body.reason);
       callback();
 
     } else {
@@ -123,6 +126,7 @@ function getStickers(id, lastpost, socket, offset, callback){
 
 io.sockets.on('connection', function(socket){
   socket.on('getStickers', function(data){
+    socket.emit('active', true);
 
     //Check redis for latest post, then call getStickers
     db.get('lastpost:' + data.id, function(err, lastpost){

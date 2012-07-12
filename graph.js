@@ -21,3 +21,13 @@ socket.on('graph', function(data){
 socket.on('message', function(data){
    messagetext.innerHTML = data;
 });
+
+socket.on('active', function(data){
+  if(data == true){
+    document.queryform.submit.disabled=true;
+    document.queryform.id.disabled=true;
+  } else {
+    document.queryform.submit.disabled=false;
+    document.queryform.id.disabled=false;
+  }
+});

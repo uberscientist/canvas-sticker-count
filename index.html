@@ -11,8 +11,6 @@
       function query(){
         var id = document.getElementById('idTextBox').value;
         socket.emit('getStickers', {id: id}); 
-        //document.queryform.submit.disabled=true;
-        //document.queryform.id.disabled=true;
         return false;
       }
     </script>
